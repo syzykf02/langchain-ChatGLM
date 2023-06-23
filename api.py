@@ -367,7 +367,10 @@ async def chat(
                                                               streaming=True):
             resp: str = answer_result.llm_output["answer"]
             print(resp)
-            yield f"data: {resp}\n\n"
+            data = json.dumps({
+                'text': resp
+            }, ensure_ascii=False)
+            yield f"data: {data}\n\n"
     return StreamingResponse(generator(), media_type="text/event-stream")
 
 

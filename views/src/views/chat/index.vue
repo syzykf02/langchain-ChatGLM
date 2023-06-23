@@ -198,7 +198,7 @@ async function onConversation() {
         // if the server emits an error message, throw an exception
         // so it gets handled by the onerror callback below:
         console.log('Received message:', event.data)
-        const data = event.data
+        const data = JSON.parse(event.data)
         if (data) {
           try {
             // const data = JSON.parse(chunk)
@@ -207,10 +207,10 @@ async function onConversation() {
               dataSources.value.length - 1,
               {
                 dateTime: new Date().toLocaleString(),
-                text: data,
+                text: data.text,
                 inversion: false,
                 error: false,
-                loading: true,
+                loading: false,
                 conversationOptions: null,
                 requestOptions: { prompt: message, options: { ...options } },
               },
@@ -233,6 +233,7 @@ async function onConversation() {
       },
     }
     await fetchEventSource(baseUrl, init)
+    loading.value = false
   }
   catch (error: any) {
     const errorMessage = error?.message ?? t('common.wrong')
