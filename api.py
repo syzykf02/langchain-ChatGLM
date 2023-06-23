@@ -12,7 +12,7 @@ from fastapi import Body, FastAPI, File, Form, Query, UploadFile, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing_extensions import Annotated
-from starlette.responses import RedirectResponse
+from starlette.responses import RedirectResponse, StreamingResponse
 
 from chains.local_doc_qa import LocalDocQA
 from configs.model_config import (KB_ROOT_PATH, EMBEDDING_DEVICE,
@@ -23,6 +23,7 @@ from models.loader.args import parser
 from models.loader import LoaderCheckPoint
 
 nltk.data.path = [NLTK_DATA_PATH] + nltk.data.path
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:128"
 
 
 class BaseResponse(BaseModel):
@@ -348,18 +349,26 @@ async def chat(
             ],
         ),
 ):
-    for answer_result in local_doc_qa.llm.generatorAnswer(prompt=question, history=history,
-                                                          streaming=True):
-        resp = answer_result.llm_output["answer"]
-        history = answer_result.history
-        pass
+    # for answer_result in local_doc_qa.llm.generatorAnswer(prompt=question, history=history,
+    #                                                       streaming=True):
+    #     resp = answer_result.llm_output["answer"]
+    #     print(resp)
+    #     history = answer_result.history
+    #     pass
 
-    return ChatMessage(
-        question=question,
-        response=resp,
-        history=history,
-        source_documents=[],
-    )
+    # return ChatMessage(
+    #     question=question,
+    #     response=resp,
+    #     history=history,
+    #     source_documents=[],
+    # )
+    async def generator():
+        for answer_result in local_doc_qa.llm.generatorAnswer(prompt=question, history=history,
+                                                              streaming=True):
+            resp: str = answer_result.llm_output["answer"]
+            print(resp)
+            yield f"data: {resp}\n\n"
+    return StreamingResponse(generator(), media_type="text/event-stream")
 
 
 async def stream_chat(websocket: WebSocket, knowledge_base_id: str):

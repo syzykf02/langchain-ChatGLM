@@ -5,6 +5,8 @@ import { useRoute } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { NAutoComplete, NButton, NDropdown, NInput, NRadioButton, NRadioGroup, useDialog, useMessage } from 'naive-ui'
 import html2canvas from 'html2canvas'
+import type { FetchEventSourceInit } from '@microsoft/fetch-event-source'
+import { EventStreamContentType, fetchEventSource } from '@microsoft/fetch-event-source'
 import { Message } from './components'
 import { useScroll } from './hooks/useScroll'
 import { useChat } from './hooks/useChat'
@@ -17,6 +19,7 @@ import { useChatStore, usePromptStore } from '@/store'
 import { t } from '@/locales'
 import { bing_search, chat, chatfile } from '@/api/chat'
 import { idStore } from '@/store/modules/knowledgebaseid/id'
+
 let controller = new AbortController()
 const { iconRender } = useIconRender()
 // const openLongReply = import.meta.env.VITE_GLOB_OPEN_LONG_REPLY === 'true'
@@ -166,82 +169,70 @@ async function onConversation() {
     },
   )
   scrollToBottom()
-
   try {
+    controller = new AbortController()
     const lastText = ''
-    const fetchChatAPIOnce = async () => {
-      const res = active.value
-        ? await chatfile({
-          knowledge_base_id: idstore.knowledgeid,
-          question: message,
-          history: history.value,
-        })
-        : await chat({
-          question: message,
-          history: history.value,
-        })
-      const result = active.value ? `${res.data.response}\n\n数据来源：\n\n>${res.data.source_documents.join('>')}` : res.data.response
-      updateChat(
-        +uuid,
-        dataSources.value.length - 1,
-        {
-          dateTime: new Date().toLocaleString(),
-          text: lastText + (result ?? ''),
-          inversion: false,
-          error: false,
-          loading: false,
-          conversationOptions: null,
-          requestOptions: { prompt: message, options: { ...options } },
-        },
-      )
-      scrollToBottomIfAtBottom()
-      loading.value = false
-      /* await fetchChatAPIProcess<Chat.ConversationResponse>({
-        prompt: message,
-        options,
-        signal: controller.signal,
-        onDownloadProgress: ({ event }) => {
-          const xhr = event.target
-          const { responseText } = xhr
-          // Always process the final line
-          const lastIndex = responseText.lastIndexOf('\n', responseText.length - 2)
-          let chunk = responseText
-          if (lastIndex !== -1)
-            chunk = responseText.substring(lastIndex)
+    const baseUrl = '/api/chat'
+    const params = {
+      question: message,
+      history: history.value,
+    }
+    const init: FetchEventSourceInit = {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      openWhenHidden: true,
+      signal: controller.signal,
+      body: JSON.stringify(params),
+      async onopen(response) {
+        if (response.ok && response.headers.get('content-type')?.includes(EventStreamContentType)) {
+          console.log('Connection opened:', response.statusText)
+        }
+        else if (response.status >= 400 && response.status < 500 && response.status !== 429) {
+          // client-side errors are usually non-retriable:
+          console.error('Error:', response.status)
+        }
+      },
+      async onmessage(event) {
+        // if the server emits an error message, throw an exception
+        // so it gets handled by the onerror callback below:
+        console.log('Received message:', event.data)
+        const data = event.data
+        if (data) {
           try {
-            const data = JSON.parse(chunk)
+            // const data = JSON.parse(chunk)
             updateChat(
               +uuid,
               dataSources.value.length - 1,
               {
                 dateTime: new Date().toLocaleString(),
-                text: lastText + (data.text ?? ''),
+                text: data,
                 inversion: false,
                 error: false,
                 loading: true,
-                conversationOptions: { conversationId: data.conversationId, parentMessageId: data.id },
+                conversationOptions: null,
                 requestOptions: { prompt: message, options: { ...options } },
               },
             )
-
-            if (openLongReply && data.detail.choices[0].finish_reason === 'length') {
-              options.parentMessageId = data.id
-              lastText = data.text
-              message = ''
-              return fetchChatAPIOnce()
-            }
 
             scrollToBottomIfAtBottom()
           }
           catch (error) {
             //
           }
-        },
-      }) */
-      updateChatSome(+uuid, dataSources.value.length - 1, { loading: false })
+        }
+      },
+      onclose() {
+        // if the server closes the connection unexpectedly, retry:
+        console.log('Connection closed')
+      },
+      onerror(err) {
+        console.error('Error:', err)
+        throw err
+      },
     }
-
-    await fetchChatAPIOnce()
+    await fetchEventSource(baseUrl, init)
   }
   catch (error: any) {
     const errorMessage = error?.message ?? t('common.wrong')

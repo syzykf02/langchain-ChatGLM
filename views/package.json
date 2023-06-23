@@ -23,6 +23,7 @@
     "common:prepare": "husky install"
   },
   "dependencies": {
+    "@microsoft/fetch-event-source": "^2.0.1",
     "@traptitech/markdown-it-katex": "^3.6.0",
     "@vueuse/core": "^9.13.0",
     "highlight.js": "^11.7.0",
@@ -31,6 +32,7 @@
     "markdown-it": "^13.0.1",
     "naive-ui": "^2.34.3",
     "pinia": "^2.0.33",
+    "pnpm": "^8.6.2",
     "qs": "^6.11.1",
     "vue": "^3.2.47",
     "vue-i18n": "^9.2.2",
